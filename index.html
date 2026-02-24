@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>野田瀬戸支店　休み・遅刻　連絡フォーム</title>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 480px;
+      margin: auto;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    h2 {
+      text-align: center;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    input, select, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 20px;
+      background: #0070f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+    #message {
+      margin-top: 15px;
+      text-align: center;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+   <h2>野田瀬戸支店　休み・遅刻　連絡フォーム</h2>
+<p id="nowTime" style="text-align:center; font-weight:bold;"></p>
+<p style="text-align:center; font-size:18px; color:#c00; font-weight:bold; line-height:1.7;">
+  翌日以降のお休み等に関しては、<br>
+  必ず事務所にお電話下さい。
+</p>
+
+
+    <form id="absenceForm" onsubmit="event.preventDefault(); submitForm();">
+
+      <label>名前
+        <input id="name" required />
+      </label>
+
+      <select id="department" required>
+  <option value="">読み込み中…</option>
+</select>
+
+      <label>理由
+        <select id="type">
+           <option value="体調不良">体調不良（軽度）</option>
+         <option value="病気">病気（感染症・通院含む）</option>
+         <option value="弔事">弔事</option>
+         <option value="天候不良">天候不良</option>
+         <option value="災害・事故">災害・事故</option>
+         <option value="公共交通機関の遅延・運休">公共交通機関の遅延・運休</option>
+         <option value="交通渋滞">交通渋滞</option>
+         <option value="急な家庭の事情">急な家庭の事情</option>
+         <option value="突発的なトラブル">突発的なトラブル</option>
+        </select>
+      </label>
+
+      <label>詳細
+  <textarea id="comment" rows="4" required></textarea>
+</label>
+
+
+      <button id="submitBtn" type="submit">送信</button>
+    </form>
+
+    <p id="message"></p>
+  </div>
+
+<script>
+const SUPABASE_URL = "https://ffpuqxyufqugotivqkgi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_5247tSd7ptdrSv6y0972rA_zm_6t99i";
+
+let sending = false;
+
+// --- 現在日時（秒まで） ---
+function updateNowTime(){
+  const el = document.getElementById("nowTime");
+  if (!el) return;
+
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
+
+  el.innerText = `現在日時：${y}-${m}-${day} ${hh}:${mm}:${ss}`;
+}
+
+// --- 所属読み込み ---
+async function loadDepartments() {
+  const select = document.getElementById("department");
+  const message = document.getElementById("message");
+
+  select.innerHTML = '<option value="">選択してください</option>';
+
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/departments?select=department_name,active,sort_order&active=eq.true&order=sort_order.asc.nullslast&order=department_name.asc`;
+    const res = await fetch(url, {
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`
+      }
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t}`);
+    }
+
+    const rows = await res.json();
+    rows.forEach(r => {
+      const opt = document.createElement("option");
+      opt.value = r.department_name;
+      opt.textContent = r.department_name;
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    message.innerText = `所属の取得に失敗: ${e.message}`;
+  }
+}
+
+// --- 送信 ---
+async function submitForm() {
+  if (sending) return;
+  sending = true;
+
+  const button = document.getElementById("submitBtn");
+  const message = document.getElementById("message");
+
+  button.disabled = true;
+  button.innerText = "送信中…";
+  message.innerText = "";
+
+  // ★コメント必須（スペースだけNG）
+  const commentEl = document.getElementById("comment");
+  const commentTrimmed = commentEl.value.trim();
+
+  if (!commentTrimmed) {
+    message.innerText = "詳細を入力してください（空欄やスペースのみは送信できません）。";
+    commentEl.focus();
+    button.disabled = false;
+    button.innerText = "送信";
+    sending = false;
+    return;
+  }
+
+  const data = {
+    name: document.getElementById("name").value,
+    department: document.getElementById("department").value,
+    type: document.getElementById("type").value,
+    comment: commentTrimmed // ★trim後を保存
+  };
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/absence_reports`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (res.ok) {
+      message.innerText = "送信しました。ご連絡ありがとうございます。";
+      document.getElementById("absenceForm").reset();
+    } else {
+      const t = await res.text();
+      message.innerText = `送信に失敗しました: ${res.status} ${t}`;
+    }
+  } catch (e) {
+    message.innerText = "通信エラーが発生しました。";
+  } finally {
+    button.disabled = false;
+    button.innerText = "送信";
+    sending = false;
+  }
+}
+
+// --- 初期処理（1回だけ） ---
+window.addEventListener("DOMContentLoaded", () => {
+  loadDepartments();
+  updateNowTime();
+  setInterval(updateNowTime, 1000);
+});
+</script>
+
+
+</body>
+</html>
+
+

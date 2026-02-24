@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>欠勤連絡 管理ページ（閲覧・CSV）</title>
+  <style>
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f5f5f5;padding:20px}
+    .card{max-width:1050px;margin:auto;background:#fff;padding:18px;border-radius:10px}
+    h2{margin:0 0 12px;text-align:center}
+    label{display:block;margin-top:10px;font-weight:600}
+    input,button{width:100%;padding:10px;margin-top:6px;font-size:16px;box-sizing:border-box}
+    button{background:#0070f3;color:#fff;border:none;border-radius:6px;cursor:pointer;margin-top:12px}
+    button:disabled{background:#999;cursor:not-allowed}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+    table{width:100%;border-collapse:collapse;margin-top:14px}
+    th,td{border:1px solid #ddd;padding:8px;font-size:14px;vertical-align:top}
+    th{background:#fafafa}
+    #msg{margin-top:10px;font-weight:700;text-align:center}
+    .muted{color:#666;font-size:12px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .pill{font-size:12px;background:#f0f0f0;padding:6px 10px;border-radius:999px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="topbar">
+      <h2>欠勤連絡 管理ページ（閲覧・CSV）</h2>
+      <div class="pill">管理者のみ共有（URL秘匿）</div>
+    </div>
+
+    <div class="row">
+      <label>開始日（任意）
+        <input id="startDate" type="date">
+      </label>
+      <label>終了日（任意）
+        <input id="endDate" type="date">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="searchBtn">表示（検索）</button>
+      <button id="csvBtn" style="background:#2b7;">CSVダウンロード</button>
+    </div>
+
+    <div id="msg"></div>
+    <div class="muted">※ 日付は日本時間（JST）で指定。未指定なら全件対象。</div>
+
+    <table id="tbl" style="display:none;">
+      <thead>
+        <tr>
+          <th>送信日時</th>
+          <th>名前</th>
+          <th>所属</th>
+          <th>種別</th>
+          <th>コメント</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+<script>
+  const SUPABASE_URL = "https://ffpuqxyufqugotivqkgi.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_5247tSd7ptdrSv6y0972rA_zm_6t99i";
+
+  const msg = (t)=>{ const el=document.getElementById("msg"); if(el) el.innerText=t||""; };
+  const showTable = (on)=>{ const t=document.getElementById("tbl"); if(t) t.style.display = on ? "table" : "none"; };
+
+  function esc(v){
+    if(v==null) return "";
+    return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  }
+
+  // DBの created_at_jst (timestamp) を「YYYY-MM-DD HH:MM:SS」に
+  function fmtJstText(s){
+    if(!s) return "";
+    // 2026-01-23T17:02:15 → 2026-01-23 17:02:15
+    return String(s).replace("T", " ").slice(0, 19);
+  }
+
+  function csvEscape(v){
+    if(v==null) return "";
+    const s=String(v);
+    return /[",\n]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
+  }
+
+  async function fetchRows(){
+    const start = document.getElementById("startDate").value; // YYYY-MM-DD
+    const end = document.getElementById("endDate").value;
+
+    const params = new URLSearchParams();
+    params.set("select", "created_at_jst,name,department,type,comment");
+    params.set("order", "created_at_jst.asc");
+
+    if (start) params.append("created_at_jst", `gte.${start}T00:00:00`);
+    if (end)   params.append("created_at_jst", `lte.${end}T23:59:59`);
+
+    const url = `${SUPABASE_URL}/rest/v1/absence_reports?${params.toString()}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Accept": "application/json"
+      }
+    });
+
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`HTTP ${res.status}: ${t}`);
+    }
+    return await res.json();
+  }
+
+  function renderTable(rows){
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+
+    rows.forEach(r=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(fmtJstText(r.created_at_jst))}</td>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.department)}</td>
+        <td>${esc(r.type)}</td>
+        <td>${esc(r.comment)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    showTable(rows.length > 0);
+  }
+
+  function downloadCSV(rows){
+    if(!rows.length){ msg("対象データがありません（0件）"); return; }
+
+    const headers = ["日時","名前","所属","理由","詳細"];
+    const lines = [
+      headers.join(","),
+      ...rows.map(r => [
+        csvEscape(fmtJstText(r.created_at_jst)),
+        csvEscape(r.name),
+        csvEscape(r.department),
+        csvEscape(r.type),
+        csvEscape(r.comment)
+      ].join(","))
+    ];
+
+    // Excel文字化け対策（BOM）
+    const bom = "\uFEFF";
+    const blob = new Blob([bom + lines.join("\n")], { type:"text/csv;charset=utf-8;" });
+
+    const start = document.getElementById("startDate").value || "all";
+    const end = document.getElementById("endDate").value || "all";
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "欠勤連絡一覧.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  // ★ ボタンのイベントは「DOMができてから」必ず登録する
+  document.addEventListener("DOMContentLoaded", () => {
+    const searchBtn = document.getElementById("searchBtn");
+    const csvBtn = document.getElementById("csvBtn");
+
+    if(!searchBtn || !csvBtn){
+      msg("ボタンIDが見つかりません（searchBtn / csvBtn を確認してください）");
+      return;
+    }
+
+    searchBtn.onclick = async ()=>{
+      msg("取得中…");
+      try{
+        const rows = await fetchRows();
+        renderTable(rows);
+        msg(rows.length ? `表示しました（${rows.length}件）` : "0件です");
+      }catch(e){
+        msg("失敗: " + (e.message || e));
+        showTable(false);
+      }
+    };
+
+    csvBtn.onclick = async ()=>{
+      msg("CSV作成中…");
+      try{
+        const rows = await fetchRows();
+        downloadCSV(rows);
+        msg("CSVをダウンロードしました");
+      }catch(e){
+        msg("失敗: " + (e.message || e));
+      }
+    };
+  });
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
