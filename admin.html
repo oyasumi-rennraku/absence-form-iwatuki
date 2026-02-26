@@ -135,34 +135,29 @@
     showTable(rows.length > 0);
   }
 
-  function downloadCSV(rows){
-    if(!rows.length){ msg("対象データがありません（0件）"); return; }
+ function downloadCSV(rows){
+  if(!rows.length){ msg("対象データがありません（0件）"); return; }
 
-    const headers = ["送信日時","名前","理由","詳細"];
-    const lines = [
-      headers.map(csvEscape).join(","),
-      ...rows.map(r => [
-        fmtJstText(r.created_at_jst),
-        r.name,
-        r.type,
-        r.comment
-      ].map(csvEscape).join(","))
-    ];
+  const headers = ["送信日時","名前","理由","詳細"];
+  const lines = [
+    headers.map(csvEscape).join(","),
+    ...rows.map(r => [
+      fmtJstText(r.created_at_jst),
+      r.name,
+      r.type,
+      r.comment
+    ].map(csvEscape).join(","))
+  ];
 
-    // Excel文字化け対策（BOM）
-    const bom = "\uFEFF";
-    const blob = new Blob([bom + lines.join("\r\n")], { type:"text/csv;charset=utf-8;" });
+  const bom = "\uFEFF";
+  const blob = new Blob([bom + lines.join("\r\n")], { type:"text/csv;charset=utf-8;" });
 
-    const start = document.getElementById("startDate").value || "all";
-    const end = document.getElementById("endDate").value || "all";
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `岩槻支店_欠勤連絡一覧_${start}-${end}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
-
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "岩槻支店_欠勤連絡一覧.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
   document.addEventListener("DOMContentLoaded", () => {
     const searchBtn = document.getElementById("searchBtn");
     const csvBtn = document.getElementById("csvBtn");
@@ -198,3 +193,4 @@
 </script>
 </body>
 </html>
+
