@@ -48,14 +48,14 @@
     <div class="muted">※ 日付は日本時間（JST）で指定。未指定なら全件対象。</div>
 
     <table id="tbl" style="display:none;">
-     <thead>
-  <tr>
-    <th>送信日時</th>
-    <th>名前</th>
-    <th>理由</th>
-    <th>詳細</th>
-  </tr>
-</thead>
+      <thead>
+        <tr>
+          <th>送信日時</th>
+          <th>名前</th>
+          <th>理由</th>
+          <th>詳細</th>
+        </tr>
+      </thead>
       <tbody id="tbody"></tbody>
     </table>
   </div>
@@ -69,20 +69,22 @@
 
   function esc(v){
     if(v==null) return "";
-    return String(v).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+    return String(v)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;");
   }
 
-  // DBの created_at_jst (timestamp) を「YYYY-MM-DD HH:MM:SS」に
+  // created_at_jst (timestamp) を「YYYY-MM-DD HH:MM:SS」に
   function fmtJstText(s){
     if(!s) return "";
-    // 2026-01-23T17:02:15 → 2026-01-23 17:02:15
     return String(s).replace("T", " ").slice(0, 19);
   }
 
   function csvEscape(v){
     if(v==null) return "";
-    const s=String(v);
-    return /[",\n]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replaceAll('"','""')}"` : s;
   }
 
   async function fetchRows(){
@@ -90,7 +92,8 @@
     const end = document.getElementById("endDate").value;
 
     const params = new URLSearchParams();
-    params.set("select", "created_at_jst,name,department,type,comment");
+    // 画面の4列に合わせる（departmentは表示しない）
+    params.set("select", "created_at_jst,name,type,comment");
     params.set("order", "created_at_jst.asc");
 
     if (start) params.append("created_at_jst", `gte.${start}T00:00:00`);
@@ -123,7 +126,6 @@
       tr.innerHTML = `
         <td>${esc(fmtJstText(r.created_at_jst))}</td>
         <td>${esc(r.name)}</td>
-        <td>${esc(r.department)}</td>
         <td>${esc(r.type)}</td>
         <td>${esc(r.comment)}</td>
       `;
@@ -136,33 +138,31 @@
   function downloadCSV(rows){
     if(!rows.length){ msg("対象データがありません（0件）"); return; }
 
-    const headers = ["日時","名前","理由","詳細"];
+    const headers = ["送信日時","名前","理由","詳細"];
     const lines = [
-     tbody.innerHTML = rows.map(r => `
-  <tr>
-    <td>${formatJst(r.created_at_jst)}</td>
-    <td>${escapeHtml(r.name)}</td>
-    <td>${escapeHtml(r.type)}</td>
-    <td>${escapeHtml(r.comment)}</td>
-  </tr>
-`).join("");
+      headers.map(csvEscape).join(","),
+      ...rows.map(r => [
+        fmtJstText(r.created_at_jst),
+        r.name,
+        r.type,
+        r.comment
+      ].map(csvEscape).join(","))
     ];
 
     // Excel文字化け対策（BOM）
     const bom = "\uFEFF";
-    const blob = new Blob([bom + lines.join("\n")], { type:"text/csv;charset=utf-8;" });
+    const blob = new Blob([bom + lines.join("\r\n")], { type:"text/csv;charset=utf-8;" });
 
     const start = document.getElementById("startDate").value || "all";
     const end = document.getElementById("endDate").value || "all";
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "岩槻支店　欠勤連絡一覧.csv";
+    a.download = `岩槻支店_欠勤連絡一覧_${start}-${end}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
 
-  // ★ ボタンのイベントは「DOMができてから」必ず登録する
   document.addEventListener("DOMContentLoaded", () => {
     const searchBtn = document.getElementById("searchBtn");
     const csvBtn = document.getElementById("csvBtn");
@@ -196,20 +196,5 @@
     };
   });
 </script>
-
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
