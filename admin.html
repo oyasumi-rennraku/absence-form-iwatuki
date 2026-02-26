@@ -52,7 +52,6 @@
         <tr>
           <th>送信日時</th>
           <th>名前</th>
-          <th>所属</th>
           <th>種別</th>
           <th>コメント</th>
         </tr>
@@ -137,13 +136,12 @@
   function downloadCSV(rows){
     if(!rows.length){ msg("対象データがありません（0件）"); return; }
 
-    const headers = ["日時","名前","所属","理由","詳細"];
+    const headers = ["日時","名前","理由","詳細"];
     const lines = [
       headers.join(","),
       ...rows.map(r => [
         csvEscape(fmtJstText(r.created_at_jst)),
         csvEscape(r.name),
-        csvEscape(r.department),
         csvEscape(r.type),
         csvEscape(r.comment)
       ].join(","))
@@ -200,6 +198,7 @@
 
 </body>
 </html>
+
 
 
 
